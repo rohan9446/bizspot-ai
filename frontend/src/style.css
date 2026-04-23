@@ -272,3 +272,6 @@ body { font-family: var(--font); background: var(--bg-0); color: var(--text); ov
   .app { grid-template-columns: 1fr; grid-template-rows: 48px 260px 1fr; }
   .sidebar { border-left: none; border-top: 1px solid var(--border); }
 }
+
+/* ─── AI INSIGHT ──────────────────────────── */
+.insight-panel strong { color: var(--text); }

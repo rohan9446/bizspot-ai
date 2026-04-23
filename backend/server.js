@@ -9,6 +9,7 @@ const app = express();
 const PORT = 8001;
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const CENSUS_API_KEY = process.env.CENSUS_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.use(cors());
 app.use(express.json());
@@ -303,6 +304,57 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ─── Reverse Geocode: Get real area name from lat/lng ────────
+const geocodeCache = new Map();
+
+async function getAreaName(lat, lng) {
+  const key = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  if (geocodeCache.has(key)) return geocodeCache.get(key);
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_API_KEY}&result_type=neighborhood|sublocality|locality`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    let name = `Area ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+
+    if (data.results && data.results.length > 0) {
+      // Try to find neighborhood first, then sublocality, then locality
+      for (const result of data.results) {
+        const components = result.address_components || [];
+        for (const comp of components) {
+          if (comp.types.includes("neighborhood")) {
+            name = comp.long_name;
+            geocodeCache.set(key, name);
+            return name;
+          }
+        }
+      }
+      // Fallback: sublocality or locality
+      for (const result of data.results) {
+        const components = result.address_components || [];
+        for (const comp of components) {
+          if (comp.types.includes("sublocality") || comp.types.includes("sublocality_level_1")) {
+            name = comp.long_name;
+            geocodeCache.set(key, name);
+            return name;
+          }
+        }
+      }
+      // Last fallback: first result's formatted address (short version)
+      const first = data.results[0];
+      const parts = first.formatted_address.split(",");
+      name = parts[0] + (parts[1] ? "," + parts[1] : "");
+    }
+
+    geocodeCache.set(key, name);
+    return name;
+  } catch (err) {
+    console.warn("Geocode error:", err.message);
+    return `Area ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+  }
+}
+
 // ─── Census API: Get real income & population data ───────────
 async function getCensusData(lat, lng) {
   try {
@@ -437,20 +489,13 @@ app.post("/api/analyze", async (req, res) => {
 // ─── Generate candidates with REAL Census data ──────────────
 async function generateCandidates(lat, lng, radiusKm, realCompetitorCount) {
   const offset = radiusKm / 111;
-  const names = [
-    "Downtown Core", "Market District", "University Area",
-    "Suburban Center", "Transit Hub", "Business Park",
-    "Waterfront", "Historic Quarter", "Tech Corridor",
-    "Shopping Boulevard", "Residential Gateway", "Arts District",
-    "Medical Row", "Financial District", "Civic Center", "Midtown",
-  ];
 
   console.log("\n📍 Generating candidates with real data...");
 
-  // Step 1: ONE Overpass call for the whole area
+  // Step 1: ONE Google Places call for proximity data
   const pois = await getAreaProximity(lat, lng, radiusKm * 1000);
 
-  // Step 2: Generate grid points and fetch Census in parallel
+  // Step 2: Generate grid points
   const points = [];
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * 2 * Math.PI;
@@ -461,19 +506,29 @@ async function generateCandidates(lat, lng, radiusKm, realCompetitorCount) {
     });
   }
 
-  console.log("  📊 Fetching Census data...");
-  const censusResults = await Promise.all(
-    points.map(p => getCensusDataCached(p.lat, p.lng))
-  );
+  // Step 3: Fetch Census + real names in parallel
+  console.log("  📊 Fetching Census data + area names...");
+  const [censusResults, nameResults] = await Promise.all([
+    Promise.all(points.map(p => getCensusDataCached(p.lat, p.lng))),
+    Promise.all(points.map(p => getAreaName(p.lat, p.lng))),
+  ]);
 
-  // Step 3: Count POIs per candidate (instant — just math, no API calls)
+  // Step 4: Combine everything
+  const seen = new Set();
   const candidates = points.map((p, i) => {
     const census = censusResults[i];
     const nearby = countNearbyPOIs(pois, p.lat, p.lng, 1);
 
+    // Make names unique — add a suffix if duplicate
+    let name = nameResults[i];
+    if (seen.has(name)) {
+      name = `${name} (${["East", "West", "North", "South"][i % 4]})`;
+    }
+    seen.add(name);
+
     return {
       id: `loc-${i + 1}`,
-      name: names[i],
+      name,
       ...p,
       income: census?.medianIncome || Math.floor(Math.random() * 80000) + 30000,
       population: census?.population || Math.floor(Math.random() * 15000) + 1000,
@@ -551,12 +606,112 @@ function scoreCandidates(candidates, weights) {
   return scored;
 }
 
+// ─── LLM Insight via Groq ────────────────────────────────────
+// ─── LLM Insight per Area via Groq ───────────────────────────
+app.post("/api/insight", async (req, res) => {
+  const { businessType, area, competitors } = req.body;
+
+  if (!area) return res.status(400).json({ error: "No area provided" });
+  if (!GROQ_API_KEY) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
+
+  const nearbyComps = (competitors || []).slice(0, 5);
+
+  const prompt = `You are a business location advisor. A user wants to open a "${businessType}" in the area called "${area.name}".
+
+AREA DATA:
+- Score: ${area.score}/100 (${area.label})
+- Median Household Income: $${area.income?.toLocaleString() || "unknown"}
+- Population: ${area.population?.toLocaleString() || "unknown"}
+- Monthly Rent: $${area.rent?.toLocaleString() || "unknown"}/month
+- Competitors nearby: ${area.competition}
+- Transit stops: ${area.nearby?.transitStops || 0}
+- Schools/colleges: ${(area.nearby?.schools || 0) + (area.nearby?.colleges || 0)}
+- Hospitals: ${area.nearby?.hospitals || 0}
+- Parks: ${area.nearby?.parks || 0}
+- Shops: ${area.nearby?.shops || 0}
+- Foot traffic score: ${area.breakdown?.footTraffic || 0}/100
+
+TOP COMPETITORS IN THIS AREA:
+${nearbyComps.length > 0 ? nearbyComps.map((c, i) => `${i + 1}. ${c.name} — Rating: ${c.rating}/5 (${c.totalReviews} reviews)${c.priceLevel ? `, Price level: ${"$".repeat(c.priceLevel)}` : ""}`).join("\n") : "No direct competitors found nearby."}
+
+Provide analysis in this exact format:
+
+**Why this area works:** [2-3 sentences about why this location is good for a ${businessType}, using specific numbers from the data]
+
+**Risks to consider:** [1-2 sentences about challenges — high rent, too many competitors, low foot traffic, etc.]
+
+**Competitor landscape:** [2-3 sentences analyzing the competitors — are they highly rated? Is there a gap in the market? What can the user do differently?]
+
+**Your advantage:** [1-2 sentences suggesting what edge the user could have — pricing, niche, hours, quality, etc.]
+
+Keep it under 200 words. Be specific with numbers. No generic advice.`;
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: "You are a concise, data-driven business location advisor. Reference specific numbers. Never give generic advice." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("Groq error:", response.status, err);
+      return res.status(500).json({ error: "LLM request failed" });
+    }
+
+    const data = await response.json();
+    const insight = data.choices?.[0]?.message?.content || "No insight generated.";
+    console.log(`  🤖 AI insight generated for "${area.name}"`);
+    res.json({ insight, model: "llama-3.1-8b-instant" });
+  } catch (err) {
+    console.error("Groq error:", err.message);
+    res.status(500).json({ error: "Failed to generate insight" });
+  }
+});
+
+// ─── Get competitors for a specific area ─────────────────────
+app.post("/api/area-competitors", async (req, res) => {
+  const { businessType, lat, lng } = req.body;
+  if (!lat || !lng || !businessType) return res.status(400).json({ error: "Missing fields" });
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=1000&keyword=${encodeURIComponent(businessType)}&key=${GOOGLE_API_KEY}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    const competitors = (data.results || []).map(p => ({
+      placeId: p.place_id,
+      name: p.name,
+      address: p.vicinity,
+      lat: p.geometry?.location?.lat,
+      lng: p.geometry?.location?.lng,
+      rating: p.rating || 0,
+      totalReviews: p.user_ratings_total || 0,
+      priceLevel: p.price_level,
+      isOpen: p.opening_hours?.open_now,
+    }));
+
+    res.json({ competitors, total: competitors.length });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch competitors" });
+  }
+});
+
 // ─── Start the server ────────────────────────────────────────
 app.listen(PORT, () => {
   console.log("");
   console.log("  ✅ BizSpot AI backend is running!");
   console.log(`  🌐 http://localhost:${PORT}`);
   console.log(`  📋 Health: http://localhost:${PORT}/health`);
-  console.log(`  🔑 Google API: ${GOOGLE_API_KEY ? "configured" : "⚠️  MISSING — add to .env"}`);
+  console.log(`  🔑 Google API: ${GOOGLE_API_KEY ? "configured" : "⚠️  MISSING"}`);
+  console.log(`  🤖 Groq LLM: ${GROQ_API_KEY ? "configured" : "⚠️  MISSING"}`);
   console.log("");
 });
