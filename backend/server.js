@@ -221,6 +221,88 @@ app.post("/api/competitors", async (req, res) => {
   }
 });
 
+// ─── OpenStreetMap Overpass: Proximity Signals ───────────────
+// Counts nearby points of interest (schools, transit, hospitals, etc.)
+// 100% free, no API key needed.
+
+
+// ─── Overpass: ONE call for the entire search area ───────────
+const areaProximityCache = new Map();
+
+async function getAreaProximity(centerLat, centerLng, radiusMeters) {
+  const key = `${centerLat.toFixed(2)},${centerLng.toFixed(2)},${radiusMeters}`;
+  if (areaProximityCache.has(key)) return areaProximityCache.get(key);
+
+  console.log("  🗺️  Fetching proximity data via Google Places...");
+
+  const types = [
+    { search: "school", type: "school" },
+    { search: "university", type: "university" },
+    { search: "bus stop transit station", type: "transit" },
+    { search: "hospital", type: "hospital" },
+    { search: "park", type: "park" },
+    { search: "stadium arena", type: "stadium" },
+  ];
+
+  const pois = [];
+
+  for (const t of types) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${centerLat},${centerLng}&radius=${radiusMeters}&keyword=${encodeURIComponent(t.search)}&key=${GOOGLE_API_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      for (const place of (data.results || [])) {
+        pois.push({
+          lat: place.geometry?.location?.lat,
+          lng: place.geometry?.location?.lng,
+          type: t.type,
+          name: place.name,
+        });
+      }
+    } catch (err) {
+      console.warn(`  ⚠️  Error fetching ${t.type}:`, err.message);
+    }
+  }
+
+  console.log(`  ✅ Found ${pois.length} nearby places (${types.map(t => `${pois.filter(p => p.type === t.type).length} ${t.type}`).join(", ")})`);
+
+  areaProximityCache.set(key, pois);
+  return pois;
+}
+
+// Count POIs within a radius of a specific candidate point
+function countNearbyPOIs(pois, lat, lng, radiusKm) {
+  const counts = { schools: 0, colleges: 0, transitStops: 0, hospitals: 0, parks: 0, stadiums: 0, shops: 0, restaurants: 0 };
+
+  if (!pois) return { ...counts, estimatedFootTraffic: 2000 };
+
+  for (const poi of pois) {
+    const dist = haversine(lat, lng, poi.lat, poi.lng);
+    if (dist > radiusKm) continue;
+
+    if (poi.type === "school") counts.schools++;
+    else if (poi.type === "university") counts.colleges++;
+    else if (poi.type === "transit") counts.transitStops++;
+    else if (poi.type === "hospital") counts.hospitals++;
+    else if (poi.type === "park") counts.parks++;
+    else if (poi.type === "stadium") counts.stadiums++;
+  }
+
+  counts.estimatedFootTraffic = counts.transitStops * 500 + counts.schools * 300 + counts.colleges * 800 + counts.hospitals * 400 + counts.parks * 200 + counts.stadiums * 2000;
+
+  return counts;
+}
+
+// Distance between two lat/lng points in km
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ─── Census API: Get real income & population data ───────────
 async function getCensusData(lat, lng) {
   try {
@@ -261,16 +343,16 @@ async function getCensusData(lat, lng) {
 
     const row = acsData[1];
     const result = {
-      medianIncome: parseInt(row[0]) || 0,
-      population: parseInt(row[1]) || 0,
-      medianAge: parseFloat(row[2]) || 0,
-      medianRent: parseInt(row[3]) || 0,
+      medianIncome: parseInt(row[0]) > 0 ? parseInt(row[0]) : null,
+      population: parseInt(row[1]) > 0 ? parseInt(row[1]) : null,
+      medianAge: parseFloat(row[2]) > 0 ? parseFloat(row[2]) : null,
+      medianRent: parseInt(row[3]) > 0 ? parseInt(row[3]) : null,
       state,
       county,
       tract: tractCode,
     };
 
-    console.log(`  💰 Income: $${result.medianIncome.toLocaleString()}, Pop: ${result.population.toLocaleString()}, Rent: $${result.medianRent}`);
+    console.log(`  💰 Income: $${result.medianIncome || 'N/A'}, Pop: ${result.population || 'N/A'}, Rent: $${result.medianRent || 'N/A'}`);
     return result;
 
   } catch (err) {
@@ -354,9 +436,7 @@ app.post("/api/analyze", async (req, res) => {
 
 // ─── Generate candidates with REAL Census data ──────────────
 async function generateCandidates(lat, lng, radiusKm, realCompetitorCount) {
-  const candidates = [];
   const offset = radiusKm / 111;
-
   const names = [
     "Downtown Core", "Market District", "University Area",
     "Suburban Center", "Transit Hub", "Business Park",
@@ -365,40 +445,52 @@ async function generateCandidates(lat, lng, radiusKm, realCompetitorCount) {
     "Medical Row", "Financial District", "Civic Center", "Midtown",
   ];
 
-  console.log("\n📍 Generating candidates with real Census data...");
+  console.log("\n📍 Generating candidates with real data...");
 
+  // Step 1: ONE Overpass call for the whole area
+  const pois = await getAreaProximity(lat, lng, radiusKm * 1000);
+
+  // Step 2: Generate grid points and fetch Census in parallel
+  const points = [];
   for (let i = 0; i < 16; i++) {
     const angle = (i / 16) * 2 * Math.PI;
     const distance = 0.3 + Math.random() * 0.7;
-    const cLat = lat + Math.sin(angle) * offset * distance;
-    const cLng = lng + Math.cos(angle) * offset * distance;
+    points.push({
+      lat: Math.round((lat + Math.sin(angle) * offset * distance) * 10000) / 10000,
+      lng: Math.round((lng + Math.cos(angle) * offset * distance) * 10000) / 10000,
+    });
+  }
 
-    // Get REAL Census data for this candidate location
-    const census = await getCensusDataCached(cLat, cLng);
+  console.log("  📊 Fetching Census data...");
+  const censusResults = await Promise.all(
+    points.map(p => getCensusDataCached(p.lat, p.lng))
+  );
 
-    const baseCompetition = Math.max(0, realCompetitorCount + Math.floor(Math.random() * 10) - 5);
+  // Step 3: Count POIs per candidate (instant — just math, no API calls)
+  const candidates = points.map((p, i) => {
+    const census = censusResults[i];
+    const nearby = countNearbyPOIs(pois, p.lat, p.lng, 1);
 
-    candidates.push({
+    return {
       id: `loc-${i + 1}`,
       name: names[i],
-      lat: Math.round(cLat * 10000) / 10000,
-      lng: Math.round(cLng * 10000) / 10000,
-      // REAL data from Census (with fallbacks)
+      ...p,
       income: census?.medianIncome || Math.floor(Math.random() * 80000) + 30000,
       population: census?.population || Math.floor(Math.random() * 15000) + 1000,
       rent: census?.medianRent || Math.floor(Math.random() * 2000) + 500,
       medianAge: census?.medianAge || 35,
-      // Still estimated (will improve later)
-      footTraffic: Math.floor(Math.random() * 8000) + 500,
-      competition: baseCompetition,
+      footTraffic: nearby.estimatedFootTraffic,
+      competition: Math.max(0, realCompetitorCount + Math.floor(Math.random() * 6) - 3),
       safety: Math.floor(Math.random() * 80) + 10,
-      // Flag if we got real data
-      hasRealData: !!census,
-    });
-  }
+      nearby,
+      hasRealData: !!census?.medianIncome,
+      hasProximityData: nearby.transitStops > 0 || nearby.schools > 0 || nearby.shops > 0,
+    };
+  });
 
   const realCount = candidates.filter(c => c.hasRealData).length;
-  console.log(`✅ ${realCount}/16 candidates have real Census data\n`);
+  const proxCount = candidates.filter(c => c.hasProximityData).length;
+  console.log(`✅ ${realCount}/16 Census, ${proxCount}/16 proximity\n`);
 
   return candidates;
 }

@@ -263,10 +263,23 @@ export default function App() {
                   <div className="metric"><div className="metric-label">Population</div><div className="metric-value">{loc.population?.toLocaleString()}</div></div>
                   <div className="metric"><div className="metric-label">Rent</div><div className="metric-value">${loc.rent?.toLocaleString()}/mo</div></div>
                   <div className="metric"><div className="metric-label">Competitors</div><div className="metric-value">{loc.competition}</div></div>
-                  <div className="metric"><div className="metric-label">Traffic</div><div className="metric-value">{loc.breakdown.footTraffic}/100</div></div>
+                  <div className="metric"><div className="metric-label">Traffic Score</div><div className="metric-value">{loc.breakdown.footTraffic}/100</div></div>
                   <div className="metric"><div className="metric-label">Safety</div><div className="metric-value">{loc.breakdown.safety}/100</div></div>
                 </div>
-                {loc.hasRealData && <span className="real-data-badge">✓ Real Census data</span>}
+                {loc.nearby && (
+                  <div className="metrics" style={{ marginTop: 4 }}>
+                    <div className="metric"><div className="metric-label">🚇 Transit</div><div className="metric-value">{loc.nearby.transitStops}</div></div>
+                    <div className="metric"><div className="metric-label">🎓 Schools</div><div className="metric-value">{loc.nearby.schools + loc.nearby.colleges}</div></div>
+                    <div className="metric"><div className="metric-label">🏥 Hospitals</div><div className="metric-value">{loc.nearby.hospitals}</div></div>
+                    <div className="metric"><div className="metric-label">🌳 Parks</div><div className="metric-value">{loc.nearby.parks}</div></div>
+                    <div className="metric"><div className="metric-label">🏟️ Stadiums</div><div className="metric-value">{loc.nearby.stadiums}</div></div>
+                    <div className="metric"><div className="metric-label">🛍️ Shops</div><div className="metric-value">{loc.nearby.shops}</div></div>
+                  </div>
+                )}
+                <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                  {loc.hasRealData && <span className="real-data-badge">✓ Census data</span>}
+                  {loc.hasProximityData && <span className="real-data-badge" style={{ background: "rgba(96,165,250,0.1)", color: "#60a5fa" }}>✓ Proximity data</span>}
+                </div>
               </div>
             ))}
           </div>
