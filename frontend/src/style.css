@@ -98,6 +98,29 @@ body { font-family: var(--font); background: var(--bg-0); color: var(--text); ov
 .h-pill-green { background: var(--green-bg); color: var(--green); }
 .h-pill-cyan { background: var(--cyan-bg); color: var(--cyan); }
 
+.theme-switch {
+  display: flex; align-items: center; gap: 6px;
+}
+.theme-switch span {
+  font-size: 10px; color: var(--text-muted);
+}
+.toggle-track {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: var(--bg-4); border: 1px solid var(--border-md);
+  cursor: pointer; position: relative; transition: background 0.3s;
+}
+.toggle-track.on {
+  background: var(--accent);
+}
+.toggle-knob {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text); position: absolute;
+  top: 2px; left: 2px; transition: transform 0.3s;
+}
+.toggle-track.on .toggle-knob {
+  transform: translateX(16px);
+  background: #fff;
+}
 /* ─── MAP ─────────────────────────────────── */
 .map-area { position: relative; background: var(--bg-0); }
 .map-chip {

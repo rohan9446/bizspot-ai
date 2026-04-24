@@ -151,18 +151,22 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="logo"><div className="logo-mark">📍</div><h1>BizSpot <span>AI</span></h1></div>
+        <div className="logo"><div className="logo-mark">B</div><h1>BizSpot <span>AI</span></h1></div>
         <div className="header-pills">
           <span className="h-pill h-pill-green">Live Data</span>
           <span className="h-pill h-pill-cyan">AI Powered</span>
-          <button className="theme-toggle" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} title="Toggle theme">
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          <div className="theme-switch">
+            <span style={{fontSize:11}}>Dark</span>
+            <div className={`toggle-track ${theme === "light" ? "on" : ""}`} onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}>
+              <div className="toggle-knob"></div>
+            </div>
+            <span style={{fontSize:11}}>Light</span>
+          </div>
         </div>
       </header>
 
       <div className="map-area">
-        {pin && <div className="map-chip">📍 Selected<div className="coords">{pin.lat.toFixed(4)}, {pin.lng.toFixed(4)}</div></div>}
+        {pin && <div className="map-chip">Selected<div className="coords">{pin.lat.toFixed(4)}, {pin.lng.toFixed(4)}</div></div>}
         {isLoaded ? (
           <GoogleMap mapContainerStyle={mapStyle} center={pin || defaultCenter} zoom={13}
             options={{ disableDefaultUI: true, zoomControl: true, styles: theme === "dark" ? darkMapStyle : lightMapStyle }}
@@ -260,10 +264,10 @@ export default function App() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
                     <div className="nearby-row">
-                      {loc.nearby?.transitStops > 0 && <span className="nb-chip">🚇 {loc.nearby.transitStops}</span>}
-                      {(loc.nearby?.schools||0) + (loc.nearby?.colleges||0) > 0 && <span className="nb-chip">🎓 {(loc.nearby?.schools||0)+(loc.nearby?.colleges||0)}</span>}
-                      {loc.nearby?.parks > 0 && <span className="nb-chip">🌳 {loc.nearby.parks}</span>}
-                      {loc.nearby?.shops > 0 && <span className="nb-chip">🛍️ {loc.nearby.shops}</span>}
+                      {loc.nearby?.transitStops > 0 && <span className="nb-chip">Transit: {loc.nearby.transitStops}</span>}
+                      {(loc.nearby?.schools||0) + (loc.nearby?.colleges||0) > 0 && <span className="nb-chip">Schools: {(loc.nearby?.schools||0)+(loc.nearby?.colleges||0)}</span>}
+                      {loc.nearby?.parks > 0 && <span className="nb-chip">Parks: {loc.nearby.parks}</span>}
+                      {loc.nearby?.shops > 0 && <span className="nb-chip">Shops: {loc.nearby.shops}</span>}
                     </div>
                     <button className={`compare-btn ${compareList.find(c => c.id === loc.id) ? "active" : ""}`}
                       style={{ opacity: 1, position: "static" }}
