@@ -196,6 +196,8 @@ app.post("/api/competitors", async (req, res) => {
 
     const response = await fetch(url);
     const data = await response.json();
+    console.log("Places API status:", data.status, "results:", (data.results || []).length);
+    if (data.status !== "OK") console.log("Places API error:", data.error_message);
 
     const competitors = (data.results || []).map((p) => ({
       placeId: p.place_id,
@@ -253,6 +255,8 @@ async function getAreaProximity(centerLat, centerLng, radiusMeters) {
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${centerLat},${centerLng}&radius=${radiusMeters}&keyword=${encodeURIComponent(t.search)}&key=${GOOGLE_API_KEY}`;
       const res = await fetch(url);
       const data = await res.json();
+      console.log(`  Places [${t.type}]:`, data.status, (data.results || []).length, "results");
+      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") console.log("  Places error:", data.error_message);
 
       for (const place of (data.results || [])) {
         pois.push({
@@ -687,6 +691,8 @@ app.post("/api/area-competitors", async (req, res) => {
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=1000&keyword=${encodeURIComponent(businessType)}&key=${GOOGLE_API_KEY}`;
     const response = await fetch(url);
     const data = await response.json();
+    console.log("Places API status:", data.status, "results:", (data.results || []).length);
+    if (data.status !== "OK") console.log("Places API error:", data.error_message);
 
     const competitors = (data.results || []).map(p => ({
       placeId: p.place_id,
