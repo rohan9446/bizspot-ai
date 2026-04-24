@@ -16,7 +16,7 @@ RUN cd frontend && npm install @rollup/rollup-linux-x64-gnu
 COPY frontend ./frontend
 
 # Build frontend
-RUN cd frontend && npx vite build
+RUN cd frontend && node node_modules/vite/bin/vite.js build
 
 # Move frontend build to backend's public folder
 RUN mkdir -p backend/public && cp -r frontend/dist/* backend/public/
