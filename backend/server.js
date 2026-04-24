@@ -110,8 +110,9 @@ const BUSINESS_TYPES = [
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    message: "BizSpot AI is running!",
-    googleApiKey: GOOGLE_API_KEY ? "configured" : "MISSING",
+    googleKey: GOOGLE_API_KEY ? `${GOOGLE_API_KEY.substring(0, 8)}...` : "MISSING",
+    groqKey: GROQ_API_KEY ? `${GROQ_API_KEY.substring(0, 8)}...` : "MISSING",
+    censusKey: CENSUS_API_KEY ? `${CENSUS_API_KEY.substring(0, 8)}...` : "MISSING",
   });
 });
 
