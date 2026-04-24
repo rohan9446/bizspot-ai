@@ -3,6 +3,7 @@
 
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 
 const app = express();
@@ -13,6 +14,39 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 app.use(cors());
 app.use(express.json());
+
+// ─── Rate Limiting ───────────────────────────────────────────
+// Limit each IP to prevent abuse and protect free tier
+
+// General API: 60 requests per minute per IP
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "Too many requests. Please wait a minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Analysis: 5 requests per minute per IP (these are expensive — many API calls each)
+const analysisLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: "Too many analyses. Please wait a minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// LLM: 10 requests per minute per IP
+const insightLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "Too many AI requests. Please wait a minute." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general limiter to all routes
+app.use(generalLimiter);
 
 // ─── Business Types Database ─────────────────────────────────
 const BUSINESS_TYPES = [
@@ -448,7 +482,7 @@ const WEIGHTS = {
 };
 
 // ─── Analyze Location ────────────────────────────────────────
-app.post("/api/analyze", async (req, res) => {
+app.post("/api/analyze", analysisLimiter, async (req, res) => {
   const { businessType, lat, lng, radiusKm } = req.body;
 
   if (!businessType || !lat || !lng) {
@@ -613,7 +647,7 @@ function scoreCandidates(candidates, weights) {
 
 // ─── LLM Insight via Groq ────────────────────────────────────
 // ─── LLM Insight per Area via Groq ───────────────────────────
-app.post("/api/insight", async (req, res) => {
+app.post("/api/insight", insightLimiter, async (req, res) => {
   const { businessType, area, competitors } = req.body;
 
   if (!area) return res.status(400).json({ error: "No area provided" });
