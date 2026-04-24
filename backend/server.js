@@ -721,7 +721,7 @@ if (fs.existsSync(publicPath)) {
 }
 
 // ─── Start the server ────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("  ✅ BizSpot AI backend is running!");
   console.log(`  🌐 http://localhost:${PORT}`);
