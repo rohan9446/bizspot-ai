@@ -1,0 +1,16 @@
+# BizSpot AI — Backend Environment Variables
+# Copy this file to .env and fill in your values
+# DO NOT commit .env to git
+
+# Google Maps API Key ($200/mo free credit)
+# Enable: Maps JavaScript API, Places API, Geocoding API
+# Get it: https://console.cloud.google.com/apis/credentials
+GOOGLE_MAPS_API_KEY=your_key_here
+
+# Groq API Key (free — 14,400 requests/day)
+# Get it: https://console.groq.com
+GROQ_API_KEY=your_key_here
+
+# US Census API Key (free, optional but recommended)
+# Get it: https://api.census.gov/data/key_signup.html
+CENSUS_API_KEY=your_key_here
