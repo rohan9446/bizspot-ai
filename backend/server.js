@@ -712,7 +712,7 @@ const publicPath = path.join(__dirname, "public");
 
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
-  app.get("*", (req, res) => {
+  app.get("/{*splat}", (req, res) => {
     if (!req.path.startsWith("/api/") && !req.path.startsWith("/health")) {
       res.sendFile(path.join(publicPath, "index.html"));
     }
