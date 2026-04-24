@@ -4,6 +4,14 @@ BizSpot AI helps entrepreneurs find the best location to open their business. Se
 
 **Live Demo:** https://bizspot-ai-874544146120.us-central1.run.app
 
+## Screenshots
+
+### Dashboard — Map + Recommended Areas
+![BizSpot AI Dashboard](image/dashboard.png.png)
+
+### Area Detail — Demographics, Competitors & AI Insights
+![BizSpot AI Area Detail](image/areaDetails.png.png)
+
 ## How It Works
 
 1. **Search** for your business type (restaurant, salon, gym, etc.)
