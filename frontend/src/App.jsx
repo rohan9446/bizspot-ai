@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { GoogleMap, useJsApiLoader, Marker, Circle } from "@react-google-maps/api";
 
-const API = "http://localhost:8001";
+const API = window.location.hostname === "localhost" ? "http://localhost:8001" : "";
 const mapStyle = { width: "100%", height: "100%" };
 const defaultCenter = { lat: 32.7157, lng: -117.1611 };
 

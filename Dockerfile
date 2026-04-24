@@ -10,7 +10,8 @@ COPY backend ./backend
 
 # Copy frontend
 COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
+RUN cd frontend && rm -rf node_modules package-lock.json && npm install
+RUN cd frontend && npm install @rollup/rollup-linux-x64-gnu
 
 COPY frontend ./frontend
 
