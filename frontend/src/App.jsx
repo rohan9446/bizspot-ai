@@ -5,7 +5,7 @@ const API = "http://localhost:8001";
 const mapStyle = { width: "100%", height: "100%" };
 const defaultCenter = { lat: 32.7157, lng: -117.1611 };
 
-const darkMap = [
+const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#0d1117" }] },
   { elementType: "labels.text.fill", stylers: [{ color: "#5a6a85" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#0a0d13" }] },
@@ -16,6 +16,16 @@ const darkMap = [
   { featureType: "poi", elementType: "geometry", stylers: [{ color: "#141c2a" }] },
   { featureType: "poi.park", elementType: "geometry.fill", stylers: [{ color: "#0b1218" }] },
   { featureType: "transit", elementType: "geometry", stylers: [{ color: "#141a26" }] },
+];
+
+const lightMapStyle = [
+  { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9d6e3" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadce0" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#e8ebe4" }] },
+  { featureType: "poi.park", elementType: "geometry.fill", stylers: [{ color: "#d4edda" }] },
 ];
 
 export default function App() {
@@ -44,6 +54,13 @@ export default function App() {
     setPin({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     resetResults();
   }, []);
+
+  const [theme, setTheme] = useState(() => localStorage.getItem("bizspot-theme") || "dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("bizspot-theme", theme);
+  }, [theme]);
 
   const resetResults = () => {
     setResults(null); setComps(null); setMarkers([]); setExpandedArea(null);
@@ -138,6 +155,9 @@ export default function App() {
         <div className="header-pills">
           <span className="h-pill h-pill-green">Live Data</span>
           <span className="h-pill h-pill-cyan">AI Powered</span>
+          <button className="theme-toggle" onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} title="Toggle theme">
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
       </header>
 
@@ -145,7 +165,7 @@ export default function App() {
         {pin && <div className="map-chip">📍 Selected<div className="coords">{pin.lat.toFixed(4)}, {pin.lng.toFixed(4)}</div></div>}
         {isLoaded ? (
           <GoogleMap mapContainerStyle={mapStyle} center={pin || defaultCenter} zoom={13}
-            options={{ disableDefaultUI: true, zoomControl: true, styles: darkMap }}
+            options={{ disableDefaultUI: true, zoomControl: true, styles: theme === "dark" ? darkMapStyle : lightMapStyle }}
             onClick={onMapClick} onLoad={(m) => { mapRef.current = m; }}>
             {pin && (<>
               <Marker position={pin} icon={{ url: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="%234f8fff" stroke="white" stroke-width="1.5"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>'), scaledSize: { width: 32, height: 32 } }} />
@@ -153,9 +173,10 @@ export default function App() {
             </>)}
             {markers.map((l, i) => (
               <Marker key={l.id} position={{ lat: l.lat, lng: l.lng }}
-                label={{ text: `${i+1}`, color: "#fff", fontSize: "9px", fontWeight: "bold" }}
-                icon={{ url: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="11" fill="${l.color}" stroke="white" stroke-width="1.5"/></svg>`), scaledSize: { width: 24, height: 24 }, anchor: { x: 12, y: 12 }, labelOrigin: { x: 12, y: 13 } }}
-                onClick={() => expandArea(l)} />
+                label={{ text: `${i+1}`, color: "#fff", fontSize: "13px", fontWeight: "bold", fontFamily: "Inter" }}
+                icon={{ url: "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54"><filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.5"/></filter><path d="M22 2C12.06 2 4 10.06 4 20c0 12.5 18 30 18 30s18-17.5 18-30C40 10.06 31.94 2 22 2z" fill="${l.color}" stroke="white" stroke-width="2.5" filter="url(#s)"/><circle cx="22" cy="20" r="12" fill="rgba(0,0,0,0.25)"/></svg>`), scaledSize: { width: 44, height: 54 }, anchor: { x: 22, y: 54 }, labelOrigin: { x: 22, y: 20 } }}
+                onClick={() => expandArea(l)}
+                zIndex={100 + (5 - i)} />
             ))}
           </GoogleMap>
         ) : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>Loading map...</div>}
