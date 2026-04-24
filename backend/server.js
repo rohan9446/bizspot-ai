@@ -6,7 +6,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
-const PORT = 8001;
+const PORT = process.env.PORT || 8001;
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const CENSUS_API_KEY = process.env.CENSUS_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -704,6 +704,21 @@ app.post("/api/area-competitors", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch competitors" });
   }
 });
+
+// ─── Serve frontend in production ────────────────────────────
+const path = require("path");
+const fs = require("fs");
+const publicPath = path.join(__dirname, "public");
+
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  app.get("*", (req, res) => {
+    if (!req.path.startsWith("/api/") && !req.path.startsWith("/health")) {
+      res.sendFile(path.join(publicPath, "index.html"));
+    }
+  });
+  console.log("  Static files: serving from /public");
+}
 
 // ─── Start the server ────────────────────────────────────────
 app.listen(PORT, () => {
