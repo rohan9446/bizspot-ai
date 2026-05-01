@@ -7,10 +7,10 @@ BizSpot AI helps entrepreneurs find the best location to open their business. Se
 ## Screenshots
 
 ### Dashboard — Map + Recommended Areas
-![BizSpot AI Dashboard](image/dashboard.png.png)
+![BizSpot AI Dashboard](image/dashboard.png)
 
 ### Area Detail — Demographics, Competitors & AI Insights
-![BizSpot AI Area Detail](image/areaDetails.png.png)
+![BizSpot AI Area Detail](image/areaDetails.png)
 
 ## How It Works
 
