@@ -178,10 +178,3 @@ docker run -p 8080:8080 \
 | Population | 10% | 10% | 10% | 10% | 20% | 25% |
 | Safety | 5% | 10% | 5% | 5% | 5% | 15% |
 
-## License
-
-MIT
-
-## Author
-
-Rohan — [@rohan9446](https://github.com/rohan9446)
